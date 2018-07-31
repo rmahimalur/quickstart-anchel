@@ -1,0 +1,1130 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  VPC stack - This template creates a Multi-AZ, multi-subnet VPC infrastructure with managed
+  NAT gateways in the public subnet for each Availability Zone. For additional subnet, set the
+  paramter values to true. **WARNING** This template creates AWS resources. You will be billed
+  for the AWS resources used if you create a stack from this template.
+
+# The Metadata tells AWS how to display the parameters during stack creation
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Availability Zone Configuration
+        Parameters:
+          - AvailabilityZones
+      - Label:
+          default: Amazon EC2 Configuration
+        Parameters:
+          - KeyPairName
+      - Label:
+          default: AWS S3 Quick Start Configuration
+        Parameters:
+          - QSS3BucketName
+          - QSS3KeyPrefix
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VPCCIDR
+    ParameterLabels:
+      VPCTenancy:
+        default: VPC Tenancy
+      VPCCIDR:
+        default: VPC CIDR
+      AvailabilityZones:
+        default: Availability Zone
+      PublicSubnet1CIDR:
+        default: Public Subnet 1 CIDR
+      PublicSubnet2CIDR:
+        default: Public Subnet 2 CIDR
+      PublicSubnet3CIDR:
+        default: Public Subnet 3 CIDR
+      PublicSubnet4CIDR:
+        default: Public Subnet 4 CIDR
+      PrivateSubnet1ACIDR:
+        default: Private Subnet 1A CIDR
+      PrivateSubnet1BCIDR:
+        default: Private Subnet 1B CIDR
+      PrivateSubnet1CCIDR:
+        default: Private Subnet 1C CIDR
+      PrivateSubnet1DCIDR:
+        default: Private Subnet 1D CIDR
+      PrivateSubnet2ACIDR:
+        default: Private Subnet 2A CIDR
+      PrivateSubnet2BCIDR:
+        default: Private Subnet 2B CIDR
+      PrivateSubnet2CCIDR:
+        default: Private Subnet 2C CIDR
+      PrivateSubnet2DCIDR:
+        default: Private Subnet 2D CIDR
+      PublicSubnet1Name:
+        default: Public Subnet 1 Name
+      PublicSubnet2Name:
+        default: Public Subnet 2 Name
+      PublicSubnet3Name:
+        default: Public Subnet 3 Name
+      PublicSubnet4Name:
+        default: Public Subnet 4 Name
+      PrivateSubnet1AName:
+        default: Private Subnet 1A Name
+      PrivateSubnet1BName:
+        default: Private Subnet 1B Name
+      PrivateSubnet1CName:
+        default: Private Subnet 1C Name
+      PrivateSubnet1DName:
+        default: Private Subnet 1D Name
+      PrivateSubnet2AName:
+        default: Private Subnet 2A Name
+      PrivateSubnet2BName:
+        default: Private Subnet 2B Name
+      PrivateSubnet2CName:
+        default: Private Subnet 2C Name
+      PrivateSubnet2DName:
+        default: Private Subnet 2D Name
+      PublicSubnetRouteTableName:
+        default: Public Subnet RouteTable Name
+      PrivateSubnet1ARouteTableName:
+        default: Private Subnet1A RouteTable Name
+      PrivateSubnet1BRouteTableName:
+        default: Private Subnet1B RouteTable Name
+      PrivateSubnet1CRouteTableName:
+        default: Private Subnet1C RouteTable Name
+      PrivateSubnet1DRouteTableName:
+        default: Private Subnet1D RouteTable Name
+      PrivateSubnet2ARouteTableName:
+        default: Private Subnet2A RouteTable Name
+      PrivateSubnet2BRouteTableName:
+        default: Private Subnet2B RouteTable Name
+      PrivateSubnet2CRouteTableName:
+        default: Private Subnet2C RouteTable Name
+      PrivateSubnet2DRouteTableName:
+        default: Private Subnet2D RouteTable Name
+      KeyPairName:
+        default: SSH Key Pair Name
+      QSS3BucketName:
+        default: S3 Bucket
+      QSS3KeyPrefix:
+        default: S3 Key Prefix
+      CreatePublicSubnet1:
+        default: Create Public Subnet 1 in AZ1, set true (or) false.
+      CreatePublicSubnet2:
+        default: Create Public Subnet 2 in AZ2, set true (or) false.
+      CreatePublicSubnet3:
+        default: Create Public Subnet 3 in AZ3, set true (or) false.
+      CreatePublicSubnet4:
+        default: Create Public Subnet 4 in AZ4, set true (or) false.
+      CreatePrivateSubnet1A:
+        default: Create Private Subnet 1A in AZ1, set true (or) false.
+      CreatePrivateSubnet1B:
+        default: Create Private Subnet 1B in AZ2, set true (or) false.
+      CreatePrivateSubnet1C:
+        default: Create Private Subnet 1C in AZ3, set true (or) false.
+      CreatePrivateSubnet1D:
+        default: Create Private Subnet 1D in AZ4, set true (or) false.
+      CreatePrivateSubnet2A:
+        default: Create Private Subnet 2A in AZ1, set true (or) false.
+      CreatePrivateSubnet2B:
+        default: Create Private Subnet 2B in AZ2, set true (or) false.
+      CreatePrivateSubnet2C:
+        default: Create Private Subnet 2C in AZ3, set true (or) false.
+      CreatePrivateSubnet2D:
+        default: Create Private Subnet 2D in AZ4, set true (or) false.
+# The Parameters allow the user to pass custom settings to the stack before creation
+Parameters:
+  VPCTenancy:
+    AllowedValues:
+      - default
+      - dedicated
+    Default: default
+    Description: The allowed tenancy of instances launched into the VPC
+    Type: String
+  VPCCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+    Type: String
+  AvailabilityZones:
+    Type: 'List<AWS::EC2::AvailabilityZone::Name>'
+    ConstraintDescription: must be the name of an AWS Availability Zone
+    Description: List of Availability Zones to use for the subnets in the VPC.
+  PublicSubnet1CIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.1.0/26
+    Description: CIDR block for the public DMZ subnet 1 located in Availability Zone 1
+    Type: String
+  PublicSubnet2CIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.2.0/26
+    Description: CIDR block for the public DMZ subnet 2 located in Availability Zone 2
+    Type: String
+  PublicSubnet3CIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.3.0/26
+    Description: CIDR block for the public DMZ subnet 3 located in Availability Zone 3
+    Type: String
+  PublicSubnet4CIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.4.0/26
+    Description: CIDR block for the public DMZ subnet 4 located in Availability Zone 4
+    Type: String
+  PrivateSubnet1ACIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.12.0/26
+    Description: CIDR block for private subnet 1A located in Availability Zone 1
+    Type: String
+  PrivateSubnet1BCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.13.0/26
+    Description: CIDR block for private subnet 1B located in Availability Zone 2
+    Type: String
+  PrivateSubnet1CCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.13.0/26
+    Description: CIDR block for private subnet 1C located in Availability Zone 3
+    Type: String
+  PrivateSubnet1DCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.14.0/26
+    Description: CIDR block for private subnet 1D located in Availability Zone 4
+    Type: String
+  PrivateSubnet2ACIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.21.0/26
+    Description: CIDR block for private subnet 2A located in Availability Zone 1
+    Type: String
+  PrivateSubnet2BCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.23.0/26
+    Description: CIDR block for private subnet 2B located in Availability Zone 2
+    Type: String
+  PrivateSubnet2CCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.23.0/26
+    Description: CIDR block for private subnet 2C located in Availability Zone 3
+    Type: String
+  PrivateSubnet2DCIDR:
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.24.0/26
+    Description: CIDR block for private subnet 2D located in Availability Zone 4
+    Type: String
+  PublicSubnet1Name:
+    Description: Specify the name of the Subnet for Public Subnet 1 in Availability Zone 1
+    Default: PublicSubnetAZ1
+    Type: String
+  PublicSubnet2Name:
+    Description: Specify the name of the Subnet for Public Subnet 2 in Availability Zone 2
+    Default: PublicSubnetAZ2
+    Type: String
+  PublicSubnet3Name:
+    Description: Specify the name of the Subnet for Public Subnet 3 in Availability Zone 3
+    Default: PublicSubnetAZ3
+    Type: String
+  PublicSubnet4Name:
+    Description: Specify the name of the Subnet for Public Subnet 4 in Availability Zone 4
+    Default: PublicSubnetAZ4
+    Type: String
+  PrivateSubnet1AName:
+    Description: Specify the name of the Subnet for Private Subnet 1 in Availability Zone 1
+    Default: PrivateSubnet1AAZ1
+    Type: String
+  PrivateSubnet1BName:
+    Description: Specify the name of the Subnet for Private Subnet 2 in Availability Zone 2
+    Default: PrivateSubnet1BAZ2
+    Type: String
+  PrivateSubnet1CName:
+    Description: Specify the name of the Subnet for Private Subnet 3 in Availability Zone 3
+    Default: PrivateSubnet1CAZ3
+    Type: String
+  PrivateSubnet1DName:
+    Description: Specify the name of the Subnet for Private Subnet 4 in Availability Zone 4
+    Default: PrivateSubnet1DAZ4
+    Type: String
+  PrivateSubnet2AName:
+    Description: Specify the name of the Subnet for Private Subnet 1 in Availability Zone 1
+    Default: PrivateSubnet2AAZ1
+    Type: String
+  PrivateSubnet2BName:
+    Description: Specify the name of the Subnet for Private Subnet 2 in Availability Zone 2
+    Default: PrivateSubnet2BAZ2
+    Type: String
+  PrivateSubnet2CName:
+    Description: Specify the name of the Subnet for Private Subnet 3 in Availability Zone 3
+    Default: PrivateSubnet2CAZ3
+    Type: String
+  PrivateSubnet2DName:
+    Description: Specify the name of the Subnet for Private Subnet 4 in Availability Zone 4
+    Default: PrivateSubnet2DAZ4
+    Type: String
+  PublicSubnetRouteTableName:
+    Description: Specify the name of the RouteTable in the Public Subnet.
+    Default: PublicSubnet
+    Type: String
+  PrivateSubnet1ARouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ1.
+    Default: PrivateSubnet1A
+    Type: String
+  PrivateSubnet1BRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ2.
+    Default: PrivateSubnet1B
+    Type: String
+  PrivateSubnet1CRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ3.
+    Default: PrivateSubnet1C
+    Type: String
+  PrivateSubnet1DRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ4.
+    Default: PrivateSubnet1D
+    Type: String
+  PrivateSubnet2ARouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ1.
+    Default: PrivateSubnet2A
+    Type: String
+  PrivateSubnet2BRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ2.
+    Default: PrivateSubnet2B
+    Type: String
+  PrivateSubnet2CRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ3.
+    Default: PrivateSubnet2C
+    Type: String
+  PrivateSubnet2DRouteTableName:
+    Description: Specify the name of the RouteTable in the Private Subnet in AZ4.
+    Default: PrivateSubnet2D
+    Type: String
+  KeyPairName:
+    Description: Existing EC2 KeyPair for SSH access.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  QSS3BucketName:
+    AllowedPattern: "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$"
+    ConstraintDescription: Quick Start bucket name can include numbers, lowercase
+      letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen
+      (-).
+    Default: anchel-quickstart
+    Description: Only change this if you have set up assets, like your own networking
+      configuration, in an S3 bucket. S3 bucket name for the Quick Start assets.
+      Quick Start bucket name can include numbers, lowercase letters, uppercase
+      letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Type: String
+  QSS3KeyPrefix:
+    AllowedPattern: ^[0-9a-zA-Z-/]*$
+    ConstraintDescription: Quick Start key prefix can include numbers, lowercase
+      letters, uppercase letters, hyphens (-), and forward slash (/).
+    Default: quickstart-anchel
+    Description: Only change this if you have set up assets in an S3 bucket, as explained
+      in the S3 Bucket parameter. S3 key prefix for the Quick Start assets.
+      Quick Start key prefix can include numbers, lowercase letters, uppercase
+      letters, hyphens (-), and forward slash (/).
+    Type: String
+  CreatePublicSubnet1:
+    Description: set true (or) false to create the public subnet 1
+    Default: 'true'
+    Type: String
+  CreatePublicSubnet2:
+    Description: set true (or) false to create the public subnet 2
+    Default: 'true'
+    Type: String
+  CreatePublicSubnet3:
+    Description: set true (or) false to create the public subnet 3
+    Default: 'false'
+    Type: String
+  CreatePublicSubnet4:
+    Description: set true (or) false to create the public subnet 4
+    Default: 'false'
+    Type: String
+  CreatePrivateSubnet1A:
+    Description: set true (or) false to create the Private subnet 1A
+    Default: 'true'
+    Type: String
+  CreatePrivateSubnet1B:
+    Description: set true (or) false to create the Private subnet 1B
+    Default: 'true'
+    Type: String
+  CreatePrivateSubnet1C:
+    Description: set true (or) false to create the Private subnet 1C
+    Default: 'flase'
+    Type: String
+  CreatePrivateSubnet1D:
+    Description: set true (or) false to create the Private subnet 1D
+    Default: 'false'
+    Type: String
+  CreatePrivateSubnet2A:
+    Description: set true (or) false to create the Private subnet 2A
+    Default: 'true'
+    Type: String
+  CreatePrivateSubnet2B:
+    Description: set true (or) false to create the Private subnet 2B
+    Default: 'true'
+    Type: String
+  CreatePrivateSubnet2C:
+    Description: set true (or) false to create the Private subnet 2C
+    Default: 'flase'
+    Type: String
+  CreatePrivateSubnet2D:
+    Description: set true (or) false to create the Private subnet 2D
+    Default: 'false'
+    Type: String
+Conditions:
+  UsEast1Condition:
+    Fn::Equals:
+    - Ref: AWS::Region
+    - "us-east-1"
+  CreatePublicSubnet1:
+    'Fn::Equals':
+      - Ref: CreatePublicSubnet1
+      - 'true'
+  CreatePublicSubnet2:
+    'Fn::Equals':
+      - Ref: CreatePublicSubnet2
+      - 'true'
+  CreatePublicSubnet3:
+    'Fn::Equals':
+      - Ref: CreatePublicSubnet3
+      - 'true'
+  CreatePublicSubnet4:
+    'Fn::Equals':
+      - Ref: CreatePublicSubnet4
+      - 'true'
+  CreatePrivateSubnet1A:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet1A
+      - 'true'
+  CreatePrivateSubnet1B:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet1B
+      - 'true'
+  CreatePrivateSubnet1C:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet1C
+      - 'true'
+  CreatePrivateSubnet1D:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet1D
+      - 'true'
+  CreatePrivateSubnet2A:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet2A
+      - 'true'
+  CreatePrivateSubnet2B:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet2B
+      - 'true'
+  CreatePrivateSubnet2C:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet2C
+      - 'true'
+  CreatePrivateSubnet2D:
+    'Fn::Equals':
+      - Ref: CreatePrivateSubnet2D
+      - 'true'
+  CreateNatGateway1Condition:
+    'Fn::Or':
+      - Condition: CreatePrivateSubnet1A
+      - Condition: CreatePrivateSubnet2A
+  CreateNatGateway2Condition:
+    'Fn::Or':
+      - Condition: CreatePrivateSubnet1B
+      - Condition: CreatePrivateSubnet2B
+  CreateNatGateway3Condition:
+    'Fn::Or':
+      - Condition: CreatePrivateSubnet1C
+      - Condition: CreatePrivateSubnet2C
+  CreateNatGateway4Condition:
+    'Fn::Or':
+      - Condition: CreatePrivateSubnet1D
+      - Condition: CreatePrivateSubnet2D
+Resources:
+  # Resources for new VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: VPCCIDR
+      InstanceTenancy:
+        Ref: VPCTenancy
+      EnableDnsSupport:    'true'
+      EnableDnsHostnames:  'true'
+      Tags:
+        - Key: Name
+          Value:
+            Ref: AWS::StackName
+
+  DHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName:
+        # us-east-1 needs .ec2.internal, the rest of the regions get <region>.compute.internal.
+        # See http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
+        Fn::If:
+        - UsEast1Condition
+        - "ec2.internal"
+        - 'Fn::Join':
+            - ''
+            - - Ref: 'AWS::Region'
+              - .compute.internal
+      DomainNameServers:
+      - AmazonProvidedDNS
+
+  VPCDHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId:
+        Ref: VPC
+      DhcpOptionsId:
+        Ref: DHCPOptions
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value:
+            Ref: 'AWS::StackName'
+        - Key: Network
+          Value: Public
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  PublicSubnet1:
+    Condition: CreatePublicSubnet1
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PublicSubnet1CIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PublicSubnet1Name
+        - Key: Network
+          Value: Public
+      MapPublicIpOnLaunch: true
+  PublicSubnet2:
+    Condition: CreatePublicSubnet2
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PublicSubnet2CIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PublicSubnet2Name
+        - Key: Network
+          Value: Public
+      MapPublicIpOnLaunch: true
+  PublicSubnet3:
+    Condition: CreatePublicSubnet3
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PublicSubnet3CIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PublicSubnet3Name
+        - Key: Network
+          Value: Public
+      MapPublicIpOnLaunch: true
+  PublicSubnet4:
+    Condition: CreatePublicSubnet4
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PublicSubnet4CIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PublicSubnet4Name
+        - Key: Network
+          Value: Public
+      MapPublicIpOnLaunch: true
+
+  PrivateSubnet1A:
+    Condition: CreatePrivateSubnet1A
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet1ACIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1AName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1B:
+    Condition: CreatePrivateSubnet1B
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet1BCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '1'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1BName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1C:
+    Condition: CreatePrivateSubnet1C
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet1CCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '2'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1CName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1D:
+    Condition: CreatePrivateSubnet1D
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet1DCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '3'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1DName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2A:
+    Condition: CreatePrivateSubnet2A
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet2ACIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '0'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2AName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2B:
+    Condition: CreatePrivateSubnet2B
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet2BCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '1'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2BName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2C:
+    Condition: CreatePrivateSubnet2C
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet2CCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '2'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2CName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2D:
+    Condition: CreatePrivateSubnet2D
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PrivateSubnet2DCIDR
+      AvailabilityZone:
+        'Fn::Select':
+          - '3'
+          - Ref: AvailabilityZones
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2DName
+        - Key: Network
+          Value: Private
+
+  # The NAT IP for the private subnets, as seen from within the public one
+  NAT1EIP:
+    Condition: CreateNatGateway1Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NAT2EIP:
+    Condition: CreateNatGateway2Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NAT3EIP:
+    Condition: CreateNatGateway3Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NAT4EIP:
+    Condition: CreateNatGateway4Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  # The NAT gateway for the private subnet
+  NATGateway1:
+    Condition: CreateNatGateway1Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        'Fn::GetAtt':
+          - NAT1EIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: NATGateway1
+  NATGateway2:
+    Condition: CreateNatGateway2Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        'Fn::GetAtt':
+          - NAT2EIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: NATGateway2
+  NATGateway3:
+    Condition: CreateNatGateway3Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        'Fn::GetAtt':
+          - NAT3EIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: NATGateway3
+  NATGateway4:
+    Condition: CreateNatGateway4Condition
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        'Fn::GetAtt':
+          - NAT4EIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet4
+      Tags:
+        - Key: Name
+          Value: NATGateway4
+
+  # RouteTable for the public subnets
+  PublicSubnetRouteTable:
+    Condition: CreatePublicSubnet1
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PublicSubnetRouteTableName
+        - Key: Network
+          Value: Public
+  PublicSubnetRoute:
+    Condition: CreatePublicSubnet1
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PublicSubnetRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Condition: CreatePublicSubnet1
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet1
+      RouteTableId:
+        Ref: PublicSubnetRouteTable
+  PublicSubnet2RouteTableAssociation:
+    Condition: CreatePublicSubnet2
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet2
+      RouteTableId:
+        Ref: PublicSubnetRouteTable
+  PublicSubnet3RouteTableAssociation:
+    Condition: CreatePublicSubnet3
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet3
+      RouteTableId:
+        Ref: PublicSubnetRouteTable
+  PublicSubnet4RouteTableAssociation:
+    Condition: CreatePublicSubnet4
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet4
+      RouteTableId:
+        Ref: PublicSubnetRouteTable
+
+  # RouteTable for the private App subnets
+  PrivateSubnet1ARouteTable:
+    Condition: CreatePrivateSubnet1A
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1ARouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1ARoute:
+    Condition: CreatePrivateSubnet1A
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet1ARouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway1
+  PrivateSubnet1ARouteTableAssociation:
+    Condition: CreatePrivateSubnet1A
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1A
+      RouteTableId:
+        Ref: PrivateSubnet1ARouteTable
+  PrivateSubnet1BRouteTable:
+    Condition: CreatePrivateSubnet1B
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1BRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1BRoute:
+    Condition: CreatePrivateSubnet1B
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet1BRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway2
+  PrivateSubnet1BRouteTableAssociation:
+    Condition: CreatePrivateSubnet1B
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1B
+      RouteTableId:
+        Ref: PrivateSubnet1BRouteTable
+  PrivateSubnet1CRouteTable:
+    Condition: CreatePrivateSubnet1C
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1CRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1CRoute:
+    Condition: CreatePrivateSubnet1C
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet1CRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway3
+  PrivateSubnet1CRouteTableAssociation:
+    Condition: CreatePrivateSubnet1C
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1C
+      RouteTableId:
+        Ref: PrivateSubnet1CRouteTable
+  PrivateSubnet1DRouteTable:
+    Condition: CreatePrivateSubnet1D
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet1DRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet1DRoute:
+    Condition: CreatePrivateSubnet1D
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet1DRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway4
+  PrivateSubnet1DRouteTableAssociation:
+    Condition: CreatePrivateSubnet1D
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1D
+      RouteTableId:
+        Ref: PrivateSubnet1DRouteTable
+
+  # RouteTable for the private DB subnets
+  PrivateSubnet2ARouteTable:
+    Condition: CreatePrivateSubnet2A
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2ARouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2ARoute:
+    Condition: CreatePrivateSubnet2A
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet2ARouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway1
+  PrivateSubnet2ARouteTableAssociation:
+    Condition: CreatePrivateSubnet2A
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2A
+      RouteTableId:
+        Ref: PrivateSubnet2ARouteTable
+  PrivateSubnet2BRouteTable:
+    Condition: CreatePrivateSubnet2B
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2BRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2BRoute:
+    Condition: CreatePrivateSubnet2B
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet2BRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway2
+  PrivateSubnet2BRouteTableAssociation:
+    Condition: CreatePrivateSubnet2B
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2B
+      RouteTableId:
+        Ref: PrivateSubnet2BRouteTable
+  PrivateSubnet2CRouteTable:
+    Condition: CreatePrivateSubnet2C
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2CRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2CRoute:
+    Condition: CreatePrivateSubnet2C
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet2CRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway3
+  PrivateSubnet2CRouteTableAssociation:
+    Condition: CreatePrivateSubnet2C
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2C
+      RouteTableId:
+        Ref: PrivateSubnet2CRouteTable
+  PrivateSubnet2DRouteTable:
+    Condition: CreatePrivateSubnet2D
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value:
+            Ref: PrivateSubnet2DRouteTableName
+        - Key: Network
+          Value: Private
+  PrivateSubnet2DRoute:
+    Condition: CreatePrivateSubnet2D
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateSubnet2DRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway4
+  PrivateSubnet2DRouteTableAssociation:
+    Condition: CreatePrivateSubnet2D
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2D
+      RouteTableId:
+        Ref: PrivateSubnet2DRouteTable
+Outputs:
+  # Outputs from VPC creation
+  VPCID:
+    Description: ID of the newly-created EC2 VPC.
+    Value:
+      Ref: VPC
